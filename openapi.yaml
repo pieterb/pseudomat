@@ -1,0 +1,145 @@
+openapi: '3.0.1'
+
+info:
+  title: Pseudomat
+  version: '0.1'
+
+components:
+
+  parameters:
+    key_id:
+      name: key_id
+      in: query
+      schema:
+        type: string
+
+
+paths:
+
+  '/project':
+    summary: 'Project information, encrypted'
+    get:
+      parameters:
+        - $ref: '#/components/parameters/key_id'
+      responses:
+        '200':
+          description: |-
+            A JWE with information about the project, signed by the project owner.
+          content:
+            'application/jose': {}
+        '400':
+          description: |-
+            `Bad Request`, probably due to invalid `key_id` parameter value.
+        '404':
+          description: |-
+            `Not Found`, probably because the `key_id` is unknown.
+
+
+  '/invites':
+    summary: 'Project information, encrypted'
+    get:
+      parameters:
+        - $ref: '#/components/parameters/key_id'
+      responses:
+        200:
+          description: |-
+            A JWE with information about the project, signed by the project owner.
+          content:
+            'application/jose': {}
+
+
+  '/members':
+    summary: 'Project information, encrypted'
+    get:
+      parameters:
+        - $ref: '#/components/parameters/key_id'
+      responses:
+        200:
+          description: |-
+            All project members, encoded as JWEs.
+          headers:
+            'ETag':
+              required: true
+              schema:
+                type: string
+            'Last-Modified':
+              required: true
+              schema:
+                type: string
+          content:
+            'application/hal+json': {}
+
+
+
+  '/members/{member_index}':
+    summary: 'Project information, encrypted'
+    get:
+      parameters:
+        - $ref: '#/components/parameters/key_id'
+        - name: member_index
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: 'If-None-Match'
+          in: header
+          schema:
+            type: string
+        - name: 'If-Modified-Since'
+          in: header
+          schema:
+            type: string
+            format: date-time
+      responses:
+        '200':
+          description: |-
+            A JWE with information about the project, signed by the project owner.
+          headers:
+            'ETag':
+              required: true
+              schema:
+                type: string
+            'Last-Modified':
+              required: true
+              schema:
+                type: string
+          content:
+            'application/jose': {}
+        '304':
+          description: 'Not Modified'
+        '404':
+          description: 'Not Found'
+        '401':
+          description: 'Unauthorized'
+    put:
+      parameters:
+        - name: member_index
+          in: path
+          required: true
+          schema:
+            type: integer
+            minimum: 1
+        - name: If-None-Match
+          in: path
+          required: true
+          schema:
+            type: string
+            enum: [ '*' ]
+      responses:
+        '201':
+          description: 'TODO'
+        '401':
+          description: 'The payload is signed with an unknown key.'
+        '403':
+          description: 'Forbidden'
+        '409':
+          description: 'This response is sent when a request conflicts with the current state of the server.'
+        '412':
+          description: 'Precondition Failed'
+        '415':
+          description: 'Unsupported Media Type'
+        '422':
+          description: 'Unprocessable Entity (WebDAV). The request was well-formed but was unable to be followed due to semantic errors.'
+        '428':
+          description: 'Precondition Required'

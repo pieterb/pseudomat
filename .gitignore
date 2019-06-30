@@ -1,0 +1,4 @@
+# Python volatile artifacts:
+__pycache__
+.eggs
+*.egg-info
