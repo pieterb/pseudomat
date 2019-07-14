@@ -1,4 +1,5 @@
 import logging
+import re
 
 from aiohttp import web
 
@@ -29,13 +30,6 @@ async def _post_root(request: web.Request) -> web.Response:
         )
     body = await request.text()
     jws_info = common.validate_project_jws(body)
-    # return {
-    #     'project_id': jti,
-    #     'email': email,
-    #     'name': name,
-    #     'sig_key': uses['sig'][0],
-    #     'enc_key': uses['enc'][0]
-    # }
 
     await database.create_project(
         request,
@@ -46,8 +40,21 @@ async def _post_root(request: web.Request) -> web.Response:
     )
 
     _logger.warning("Can’t send email yet.")
+
     return web.HTTPCreated(
         headers={
             'Location': str(request.rel_url / jws_info['project_id'])
+        }
+    )
+
+
+@routes.post('/{project_id}/invites')
+async def _post_invite(request: web.Request) -> web.Response:
+    project_id = request.match_info['project_id']
+    if not re.fullmatch(r'[-\w]{43}', project_id):
+        raise web.HTTPNotFound()
+    return web.HTTPCreated(
+        headers={
+            'Location': '/project_id/invites/blabla'
         }
     )

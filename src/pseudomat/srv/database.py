@@ -38,11 +38,21 @@ def metadata() -> sa.MetaData:
     sa.Table(
         'project', retval,
         sa.Column('id', postgresql.CHAR(length=43), index=True, nullable=False, primary_key=True),
-        sa.Column('jws', postgresql.TEXT, nullable=False),
+        sa.Column('jws', postgresql.TEXT(), index=True, nullable=False, unique=True),
+        sa.Column('verified', postgresql.BOOLEAN(), index=True, nullable=False, server_default='FALSE'),
+        sa.Column('sig_key', postgresql.TEXT(), nullable=False),
+        sa.Column('enc_key', postgresql.TEXT(), nullable=False),
+        sa.Column('created_at', postgresql.TIMESTAMP(timezone=None), index=True, nullable=False, server_default=sa_functions.now())
+    )
+
+    sa.Table(
+        'invite', retval,
+        sa.Column('id', postgresql.INTEGER(), autoincrement=True, index=True, nullable=False, primary_key=True),
+        sa.Column('jws', postgresql.TEXT(), nullable=False),
+        sa.Column('project_id', postgresql.CHAR(length=43), sa.ForeignKey('project.id'), nullable=False),
+        sa.Column('name', postgresql.VARCHAR(length=80), nullable=False),
         sa.Column('created_at', postgresql.TIMESTAMP(timezone=None), server_default=sa_functions.now(), index=True, nullable=False),
-        sa.Column('verified', postgresql.BOOLEAN, index=True, nullable=False, server_default='FALSE'),
-        sa.Column('sig_key', postgresql.TEXT, nullable=False),
-        sa.Column('enc_key', postgresql.TEXT, nullable=False)
+        sa.UniqueConstraint('project_id', 'name', name='invite_pk_2')
     )
 
     # sa.Table(
@@ -224,16 +234,15 @@ async def create_project(request: web.Request, project_id: str, jws: str, sig_ke
     project = metadata().tables['project']
     async with request.app['engine'].acquire() as conn:
         try:
-            async with conn.begin():
-                await conn.execute(
-                    project.insert().values(
-                        id=project_id,
-                        jws=jws,
-                        sig_key=sig_key,
-                        enc_key=enc_key
-                    )
+            await conn.execute(
+                project.insert().values(
+                    id=project_id,
+                    jws=jws,
+                    sig_key=sig_key,
+                    enc_key=enc_key
                 )
-        except psycopg2.IntegrityError as e:
+            )
+        except psycopg2.IntegrityError:
             result_proxy = await conn.execute(
                 sa.select([sa.func.count()]).select_from(project)
                 .where(project.c.jws == jws)
@@ -247,6 +256,37 @@ async def create_project(request: web.Request, project_id: str, jws: str, sig_ke
                 raise web.HTTPPreconditionFailed(
                     reason="Another project with the same e-mail address and name exists."
                 )
+
+
+async def create_invite(request: web.Request, project_id: str, jws: str, name: str):
+    """
+
+    Raises:
+        PreconditionFailed: if another invite with this project_id/name exists.
+
+    """
+    invite = metadata().tables['invite']
+    async with request.app['engine'].acquire() as conn:
+        try:
+            await conn.execute(
+                invite.insert().returning(invite.c.id).values(
+                    project_id=project_id,
+                    jws=jws,
+                    name=name
+                )
+            )
+        except psycopg2.IntegrityError:
+            project = metadata().tables['project']
+            result_proxy = await conn.execute(
+                sa.select([sa.func.count()]).select_from(project)
+                .where(project.c.id == project_id)
+            )
+            result = await result_proxy.fetchone()
+            if result[0] == 0:
+                raise web.HTTPNotFound()
+            raise web.HTTPPreconditionFailed(
+                reason="That invite was already issued."
+            )
 
 
 # async def initialize_database(
