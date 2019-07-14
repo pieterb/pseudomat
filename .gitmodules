@@ -1,0 +1,3 @@
+[submodule "aiohttp_extras"]
+	path = aiohttp_extras
+	url = git@github.com:Amsterdam/aiohttp_extras.git

@@ -1,0 +1,41 @@
+---
+logging:
+  version: 1
+  formatters:
+    default:
+      format: '%(asctime)s pseudomatd %(levelname)-8s %(module)s:%(lineno)d: %(message)s'
+  handlers:
+    console:
+      class: logging.StreamHandler
+      formatter: default
+    aiohttp.access:
+      class: logging.StreamHandler
+  loggers:
+    aiohttp.access:
+      level: ${LOGLEVEL:-DEBUG}
+      handlers:
+      - aiohttp.access
+      propagate: false
+    aiohttp:
+      propagate: true
+    config_loader:
+      level: ${LOGLEVEL:-DEBUG}
+      handlers:
+      - console
+      propagate: false
+  root:
+    level: ${LOGLEVEL:-WARNING}
+    handlers:
+    - console
+
+
+postgres:
+  host: ${DB_HOST:-localhost}
+  port: ${DB_PORT:-5432}
+  user: ${DB_USER:-pseudomat}
+  password: ${DB_PASS:-pseudomat}
+  dbname: ${DB_DATABASE:-pseudomat}
+
+
+pseudomat:
+  bind_port: 8080
