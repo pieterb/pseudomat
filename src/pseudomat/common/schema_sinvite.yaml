@@ -1,0 +1,94 @@
+---
+"$schema": https://json-schema.org/draft-07/schema#
+type: object
+required:
+  - jti
+  - iss
+  - sub
+  - iat
+  - psig
+  - penc
+additionalProperties: false
+
+
+properties:
+
+  jti:
+    type: string
+    regex: "^[-\\w]{32}$"
+
+  iss:
+    type: string
+    format: email
+    maxLength: 80
+    minLength: 1
+
+  sub:
+    type: string
+    regex: "^[^\\x00-\\x1F]{1,80}$"
+
+  iat:
+    type: integer
+
+  ssig:
+    "$ref": "#/definitions/secret_signing_key"
+
+  senc:
+    "$ref": "#/definitions/secret_encryption_key"
+
+
+definitions:
+
+  secret_key:
+    type: object
+    additionalProperties: true
+    required:
+      - kty
+    properties:
+      kty:
+        type: string
+        const: OKP
+
+  secret_signing_key:
+    allOf:
+      - "$ref": "#/definitions/secret_key"
+      - type: object
+        additionalProperties: true
+        required:
+          - crv
+          - use
+          - x
+          - d
+        properties:
+          crv:
+            type: string
+            const: Ed448
+          use:
+            type: string
+            const: sig
+          x:
+            type: string
+          d:
+            type: string
+
+  secret_encryption_key:
+    allOf:
+      - "$ref": "#/definitions/secret_key"
+      - type: object
+        additionalProperties: true
+        required:
+          - crv
+          - use
+          - x
+          - d
+        properties:
+          crv:
+            type: string
+            const: X448
+          use:
+            type: string
+            const: enc
+          x:
+            type: string
+          d:
+            type: string

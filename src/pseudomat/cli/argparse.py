@@ -11,24 +11,85 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument('-d', '--debug', action='store_true', dest='debug')
-    parser.add_argument('--no-log', action='store_true', dest='nolog')
     subparsers = parser.add_subparsers(
         title='Available commands',
         description=textwrap.dedent("""\
-            project create
+            invite
+            project
         """),
         dest='command',
         help="Run `%(prog)s COMMAND --help` for details.",
         metavar='COMMAND'
     )
 
-    # PROJECT
-    # =======
-    project = subparsers.add_parser('project')
+    add_invite(subparsers)
+    add_project(subparsers)
+
+    retval = parser.parse_args()
+    if retval.command is None:
+        parser.print_help()
+        parser.exit()
+    if retval.subcommand is None:
+        subparser = subparsers.choices[retval.command]
+        subparser.print_help()
+        subparser.exit()
+    return retval
+
+
+def add_invite(subparsers):
+    invite = subparsers.add_parser(
+        'invite',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
+    invite_subparsers = invite.add_subparsers(
+        title='Available subcommands',
+        description=textwrap.dedent("""\
+            create
+        """),
+        dest='subcommand',
+        help="Run `%(prog)s SUBCOMMAND --help` for details.",
+        metavar='SUBCOMMAND'
+    )
+
+    # INVITE CREATE
+    # -------------
+    invite_create = invite_subparsers.add_parser(
+        'create',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""
+Create a new invite, and register the invite with the Pseudomat service. This
+command is idempotent.
+
+Output: the invitation token you can send to the intended project member.
+        """)
+    )
+    invite_create.add_argument(
+        'name',
+        help='The name of the party you wish to invite. This name will be visible to all project members.',
+        action='store',
+        metavar='invitee_name'
+    )
+    invite_create.add_argument(
+        '-p', '--project',
+        help="Name of the project to use, instead of the default project.",
+        action='store',
+        dest='project',
+        metavar='project_name'
+    )
+
+
+def add_project(subparsers):
+    project = subparsers.add_parser(
+        'project',
+        formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     project_subparsers = project.add_subparsers(
         title='Available subcommands',
         description=textwrap.dedent("""\
             create
+            delete
+            info
+            list
         """),
         dest='subcommand',
         help="Run `%(prog)s SUBCOMMAND --help` for details.",
@@ -41,11 +102,8 @@ def main():
         'create',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         description=textwrap.dedent("""
-            Create a new project, and register the project with the Pseudomat service.
-
-            Idempotent: yes
-
-            Output: the project ID of the created project
+            Create a new project, and register the project with the Pseudomat service. This
+            command is idempotent.
         """)
     )
     project_create.add_argument(
@@ -67,15 +125,58 @@ def main():
         dest='default'
     )
 
-    retval = parser.parse_args()
-    if retval.command is None:
-        parser.print_help()
-        parser.exit()
-    if retval.subcommand is None:
-        subparser = subparsers.choices[retval.command]
-        subparser.print_help()
-        subparser.exit()
-    return retval
+    # PROJECT DELETE
+    # --------------
+    project_delete = project_subparsers.add_parser(
+        'delete',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            Delete a project.
+        """)
+    )
+    project_delete.add_argument(
+        '-p', '--project',
+        help='The name of the project you want to delete.',
+        action='store',
+        required=True,
+        dest='project',
+        metavar='project_name'
+    )
+
+    # PROJECT INFO
+    # ------------
+    project_info = project_subparsers.add_parser(
+        'info',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            Show available information about a project.
+        """)
+    )
+    project_info.add_argument(
+        '-p', '--project',
+        help='The name of the project you want info about. If omitted, this command returns info about the default project.',
+        action='store',
+        dest='project',
+        metavar='project_name'
+    )
+
+    # PROJECT LIST
+    # --------------
+    _project_list = project_subparsers.add_parser(
+        'list',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        description=textwrap.dedent("""\
+            List all projects.
+
+            Outputs one line per project, with the following formatting:
+                'O'|'M' '*'? ':' <email_address> project_name
+
+            The first character indicates if you are the owner of the project ('O') or just
+            a project member ('M').
+
+            The optional asterisk '*' indicates the current default project.
+        """)
+    )
 
 
 if __name__ == '__main__':

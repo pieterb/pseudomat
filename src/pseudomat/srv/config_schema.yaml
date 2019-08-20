@@ -39,9 +39,25 @@ properties:
     additionalProperties: false
     required:
       - bind_port
+      - secret
     properties:
       bind_port:
         type: integer
+      secret:
+        type: string
+
+  sendgrid:
+    type: object
+    additionalProperties: false
+    required:
+      - url
+      - api_key
+    properties:
+      url:
+        type: string
+        format: url
+      api_key:
+        type: string
 
 
 definitions:

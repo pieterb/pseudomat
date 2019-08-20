@@ -39,3 +39,9 @@ postgres:
 
 pseudomat:
   bind_port: 8080
+  secret: foobar
+
+
+sendgrid:
+  url: 'https://api.sendgrid.com/v3/mail/send'
+  api_key: 'SG.MyAPIKey'

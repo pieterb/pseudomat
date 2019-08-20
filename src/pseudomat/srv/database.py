@@ -1,11 +1,6 @@
 # language=rst
 """
 
-.. todo:: Automatic schema creation and schema updates on target platforms.
-
-    Currently, creating or upgrading the database schema on acceptance and
-    production is automated in the deploy lane.
-
 This module uses aiopg for asynchronous query execution, and the SQLAlchemy core
 query builder.
 
@@ -19,10 +14,10 @@ from aiohttp import web
 import aiopg.sa
 import psycopg2
 import sqlalchemy.sql.functions as sa_functions
-import sqlalchemy.exc as sa_exceptions
 from sqlalchemy.dialects import postgresql
 import sqlalchemy as sa
 
+from pseudomat.common import fingerprint
 
 _logger = logging.getLogger(__name__)
 
@@ -37,22 +32,28 @@ def metadata() -> sa.MetaData:
 
     sa.Table(
         'project', retval,
-        sa.Column('id', postgresql.CHAR(length=43), index=True, nullable=False, primary_key=True),
-        sa.Column('jws', postgresql.TEXT(), index=True, nullable=False, unique=True),
-        sa.Column('verified', postgresql.BOOLEAN(), index=True, nullable=False, server_default='FALSE'),
-        sa.Column('sig_key', postgresql.TEXT(), nullable=False),
-        sa.Column('enc_key', postgresql.TEXT(), nullable=False),
-        sa.Column('created_at', postgresql.TIMESTAMP(timezone=None), index=True, nullable=False, server_default=sa_functions.now())
+        sa.Column('jti', postgresql.CHAR(length=32)),
+        sa.Column('iss', postgresql.VARCHAR(length=80)),
+        sa.Column('sub', postgresql.VARCHAR(length=80)),
+        sa.Column('iat', postgresql.INTEGER),
+        sa.Column('psig', postgresql.TEXT()),
+        sa.Column('penc', postgresql.TEXT()),
+        sa.Column('jws', postgresql.TEXT()),
+        sa.Column('last_modified', postgresql.TIMESTAMP(timezone=None),
+                  server_default=sa_functions.now())
     )
 
     sa.Table(
         'invite', retval,
-        sa.Column('id', postgresql.INTEGER(), autoincrement=True, index=True, nullable=False, primary_key=True),
+        sa.Column('sub', postgresql.VARCHAR(length=80)),
         sa.Column('jws', postgresql.TEXT(), nullable=False),
-        sa.Column('project_id', postgresql.CHAR(length=43), sa.ForeignKey('project.id'), nullable=False),
-        sa.Column('name', postgresql.VARCHAR(length=80), nullable=False),
-        sa.Column('created_at', postgresql.TIMESTAMP(timezone=None), server_default=sa_functions.now(), index=True, nullable=False),
-        sa.UniqueConstraint('project_id', 'name', name='invite_pk_2')
+        sa.Column('iat', postgresql.INTEGER),
+        sa.Column('iss', postgresql.CHAR(length=32), sa.ForeignKey('project.jti')),
+        sa.Column('jti', postgresql.CHAR(length=32), primary_key=True),
+        sa.Column('psig', postgresql.TEXT()),
+        sa.Column('penc', postgresql.TEXT()),
+        sa.Column('last_modified', postgresql.TIMESTAMP(timezone=None),
+                  server_default=sa_functions.now())
     )
 
     # sa.Table(
@@ -65,6 +66,140 @@ def metadata() -> sa.MetaData:
     # )
 
     return retval
+
+
+def context(app):
+    dbconf = app['config']['postgres']
+    _logger.info("Connecting to database: postgres://%s:%i/%s",
+                 dbconf['host'], dbconf['port'], dbconf['dbname'])
+    return aiopg.sa.create_engine(
+        user=dbconf['user'],
+        database=dbconf['dbname'],
+        host=dbconf['host'],
+        port=dbconf['port'],
+        password=dbconf['password'],
+        client_encoding='utf8'
+    )
+
+
+async def initialize_schema(app):
+    async with app['engine'].acquire() as conn:
+        pass
+
+
+async def create_project(
+    app: web.Application,
+    jti: str,
+    iss: str,
+    sub: str,
+    iat: int,
+    psig: str,
+    penc: str,
+    jws: str
+) -> bool:
+    """
+
+    Raises:
+        PreconditionFailed: if another project with this email/name exists.
+
+        SeeOther: if the project already exists.
+
+    """
+    project = metadata().tables['project']
+    async with app['engine'].acquire() as conn:
+        try:
+            await conn.execute(
+                project.insert().values(
+                    jti=jti,
+                    iss=iss,
+                    sub=sub,
+                    iat=iat,
+                    psig=psig,
+                    penc=penc,
+                    jws=jws
+                )
+            )
+        except psycopg2.IntegrityError:
+            result_proxy = await conn.execute(
+                sa.select([sa.func.count()]).select_from(project)
+                .where(project.c.jws == jws)
+            )
+            result = await result_proxy.fetchone()
+            if result[0] == 1:
+                return False
+            else:
+                raise web.HTTPForbidden(
+                    text="Another project with the same e-mail address and name exists."
+                )
+    return True
+
+
+async def delete_project(app, project_id: str):
+    project = metadata().tables['project']
+    async with app['engine'].acquire() as conn:
+        await conn.execute(
+            project.delete().where(project.c.jti == project_id)
+        )
+
+
+async def get_project(app, project_id: str) -> T.Optional[dict]:
+    project = metadata().tables['project']
+    async with app['engine'].acquire() as conn:
+        result_proxy = await conn.execute(
+            sa.select([project]).select_from(project)
+            .where(project.c.jti == project_id)
+        )
+        result = await result_proxy.fetchone()
+        if result is None:
+            return None
+        return dict(result.items())
+
+
+async def create_invite(
+    app: web.Application,
+    jti: str,
+    iss: str,
+    sub: str,
+    iat: int,
+    psig: str,
+    penc: str,
+    jws: str
+) -> bool:
+    """
+
+    Raises:
+        PreconditionFailed: if another project with this email/name exists.
+
+        SeeOther: if the project already exists.
+
+    """
+    invite = metadata().tables['invite']
+    async with app['engine'].acquire() as conn:
+        try:
+            await conn.execute(
+                invite.insert().values(
+                    jti=jti,
+                    iss=iss,
+                    sub=sub,
+                    iat=iat,
+                    psig=psig,
+                    penc=penc,
+                    jws=jws
+                )
+            )
+        except psycopg2.IntegrityError:
+            result_proxy = await conn.execute(
+                sa.select([sa.func.count()]).select_from(invite)
+                .where(invite.c.jws == jws)
+            )
+            result = await result_proxy.fetchone()
+            if result[0] == 1:
+                return False
+            else:
+                raise web.HTTPForbidden(
+                    text="Another invite with the same name exists."
+                )
+    return True
 
 
 # async def _accountroleslog_insert(
@@ -93,30 +228,6 @@ def metadata() -> sa.MetaData:
 #     )
 #     row = await result_set.fetchone()
 #     return row[0]
-
-
-async def initialize_app(app):
-    dbconf = app['config']['postgres']
-    _logger.info("Connecting to database: postgres://%s:%i/%s",
-                 dbconf['host'], dbconf['port'], dbconf['dbname'])
-    engine_context = aiopg.sa.create_engine(
-        user=dbconf['user'],
-        database=dbconf['dbname'],
-        host=dbconf['host'],
-        port=dbconf['port'],
-        password=dbconf['password'],
-        client_encoding='utf8'
-    )
-    app['engine'] = await engine_context.__aenter__()
-    #await check_introspection(app['engine'])
-    #await initialize_database(app['engine'], required_accounts=app['config']['authz_admin']['required_accounts'])
-
-    async def on_shutdown(app):
-        await engine_context.__aexit__(None, None, None)
-    app.on_shutdown.append(on_shutdown)
-
-
-#async def check_introspection(engine):
 
 
 # async def accounts(request, role_ids=None):
@@ -220,73 +331,6 @@ async def initialize_app(app):
 #             if result_set.rowcount != 1:
 #                 raise PreconditionFailed()
 #     return log_id
-
-
-async def create_project(request: web.Request, project_id: str, jws: str, sig_key: str, enc_key: str):
-    """
-
-    Raises:
-        PreconditionFailed: if another project with this email/name exists.
-
-        SeeOther: if the project already exists.
-
-    """
-    project = metadata().tables['project']
-    async with request.app['engine'].acquire() as conn:
-        try:
-            await conn.execute(
-                project.insert().values(
-                    id=project_id,
-                    jws=jws,
-                    sig_key=sig_key,
-                    enc_key=enc_key
-                )
-            )
-        except psycopg2.IntegrityError:
-            result_proxy = await conn.execute(
-                sa.select([sa.func.count()]).select_from(project)
-                .where(project.c.jws == jws)
-            )
-            result = await result_proxy.fetchone()
-            if result[0] == 1:
-                raise web.HTTPSeeOther(
-                    location=str(request.rel_url / project_id)
-                )
-            else:
-                raise web.HTTPPreconditionFailed(
-                    reason="Another project with the same e-mail address and name exists."
-                )
-
-
-async def create_invite(request: web.Request, project_id: str, jws: str, name: str):
-    """
-
-    Raises:
-        PreconditionFailed: if another invite with this project_id/name exists.
-
-    """
-    invite = metadata().tables['invite']
-    async with request.app['engine'].acquire() as conn:
-        try:
-            await conn.execute(
-                invite.insert().returning(invite.c.id).values(
-                    project_id=project_id,
-                    jws=jws,
-                    name=name
-                )
-            )
-        except psycopg2.IntegrityError:
-            project = metadata().tables['project']
-            result_proxy = await conn.execute(
-                sa.select([sa.func.count()]).select_from(project)
-                .where(project.c.id == project_id)
-            )
-            result = await result_proxy.fetchone()
-            if result[0] == 0:
-                raise web.HTTPNotFound()
-            raise web.HTTPPreconditionFailed(
-                reason="That invite was already issued."
-            )
 
 
 # async def initialize_database(

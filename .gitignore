@@ -2,3 +2,8 @@
 __pycache__
 .eggs
 *.egg-info
+
+/docs
+
+/config.yml
+cli.sqlite

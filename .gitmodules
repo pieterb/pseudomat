@@ -1,3 +1,9 @@
 [submodule "aiohttp_extras"]
 	path = aiohttp_extras
 	url = git@github.com:Amsterdam/aiohttp_extras.git
+[submodule "jwcrypto"]
+	path = jwcrypto
+	url = git@github.com:latchset/jwcrypto.git
+[submodule "sphinx"]
+	path = sphinx
+	url = git@github.com:pieterb/sphinx_boilerplate.git
