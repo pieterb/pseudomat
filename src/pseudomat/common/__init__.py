@@ -5,7 +5,6 @@ import json
 import logging
 import typing as T
 
-from aiohttp import web_exceptions as web
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey, Ed25519PrivateKey
 from cryptography.exceptions import InvalidSignature
 from jwcrypto import jwk, jws
@@ -62,16 +61,16 @@ def validate_jws(data: str, typ: str) -> T.Tuple[jws.JWS, T.Dict[str, T.Any]]:
     try:
         decoder.deserialize(data)
     except jws.InvalidJWSObject:
-        raise web.HTTPBadRequest(
-            text="Syntax error in JWS"
+        raise ValueError(
+            "Syntax error in JWS"
         )
     if decoder.jose_header.get('typ', None) != typ:
-        raise web.HTTPBadRequest(text="Invalid 'typ' claim.")
+        raise ValueError("Invalid 'typ' claim.")
     try:
         payload = json_loads(decoder.objects['payload'])
     except json.JSONDecodeError:
-        raise web.HTTPBadRequest(
-            text="Payload isn’t valid JSON"
+        raise ValueError(
+            "Payload isn’t valid JSON"
         )
 
     return decoder, payload
@@ -124,7 +123,10 @@ def validate_project_jws(data: str) -> dict:
 
 
 def validate_invite_jws(data: str, project_key: jwk.JWK) -> dict:
-
+    """
+    Raises:
+        ValueError: Corresponds to
+    """
     decoder, payload = validate_jws(data, 'pinvite')
 
     # From here on, "Unprocessable Entity" must be raised on error:
@@ -194,7 +196,11 @@ class SignedObject(object):
 
 
 def delete_token(project_id):
-    payload = fingerprint({
+    """
+    .. todo::
+        Implement, document
+    """
+    _payload = fingerprint({
         'method': 'DELETE',
         'url': '/' + project_id
     })

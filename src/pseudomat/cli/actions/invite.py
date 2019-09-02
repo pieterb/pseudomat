@@ -4,7 +4,6 @@ import time
 
 from jwcrypto import jwk, jwt
 import requests
-from sqlalchemy.exc import IntegrityError
 
 from pseudomat import common
 
@@ -94,7 +93,7 @@ def create_local_invite(project: database.Project, sub: str) -> database.Invite:
     )
     try:
         database.add_invite(invite)
-    except IntegrityError:
+    except database.IntegrityError:
         sys.exit("An invite with that name already exists.")
 
     return invite

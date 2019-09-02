@@ -1,9 +1,19 @@
 # Python volatile artifacts:
-__pycache__
+*.pyc
+__pycache__/
 .eggs
-*.egg-info
 
 /docs
 
 /config.yml
 cli.sqlite
+
+instance/
+
+.pytest_cache/
+.coverage
+htmlcov/
+
+dist/
+build/
+*.egg-info/

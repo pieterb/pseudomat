@@ -5,7 +5,6 @@ import typing as T
 
 from jwcrypto import jwk, jws, jwt
 import requests
-from sqlalchemy.exc import IntegrityError
 
 from ... import common
 from .. import database, globals
@@ -76,7 +75,7 @@ def create_local_project(iss: str, sub: str) -> database.Project:
     )
     try:
         database.add_project(project)
-    except IntegrityError:
+    except database.IntegrityError:
         sys.exit("A project with that name already exists.")
 
     return project

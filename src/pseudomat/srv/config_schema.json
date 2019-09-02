@@ -71,6 +71,18 @@
           "type": "string"
         }
       }
+    },
+    "sqlite": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "filename"
+      ],
+      "properties": {
+        "filename": {
+          "type": "string"
+        }
+      }
     }
   },
   "definitions": {

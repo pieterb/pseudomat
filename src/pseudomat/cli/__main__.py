@@ -32,9 +32,21 @@ def initialize_logging(debug: bool):
         logging.getLogger().addHandler(filehandler)
 
 
+def initialize_database():
+    import sqlalchemy as sa
+    from ..common import database
+    from . import globals
+    engine = sa.create_engine(
+        'sqlite:///' + str(globals.config_dir() / 'pseudomat.sqlite'),
+        isolation_level='SERIALIZABLE'
+    )
+    database.set_engine(engine)
+
+
 def main():
     args = argparse.main()
     initialize_logging(args.debug)
+    initialize_database()
     from . import commands
     command = getattr(commands, f'{args.command}_{args.subcommand}')
     try:
