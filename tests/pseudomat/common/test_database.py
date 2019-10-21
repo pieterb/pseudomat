@@ -26,7 +26,7 @@ def test_project(db):
         penc='penc',
         ssig='ssig',
         senc='senc',
-        jws='foobar'
+        jws='foobaz'
     ) is False
 
     assert db.get_project(jti) == {

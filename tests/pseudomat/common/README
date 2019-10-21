@@ -1,0 +1,2 @@
+This directory should be deleted in the future, as the CLI and server tests
+should cover all code, including the "common" code.

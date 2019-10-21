@@ -1,3 +1,8 @@
+# language=rst
+"""
+.. todo:: Overstappen naar Click.
+"""
+
 import argparse
 import logging
 import textwrap

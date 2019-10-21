@@ -17,7 +17,7 @@ def project_create(args):
         actions.project.delete_local_project(project)
         raise
     if args.default:
-        actions.project.set_default_project_id(project.jti)
+        actions.project.set_default_project_id(project['jti'])
 
 
 def project_delete(args):
@@ -25,7 +25,7 @@ def project_delete(args):
     default_project = actions.project.get_current_project(required=False)
     actions.project.delete_remote_project(current_project)
     actions.project.delete_local_project(current_project)
-    if default_project is not None and default_project.jti == current_project.jti:
+    if default_project is not None and default_project['jti'] == current_project['jti']:
         actions.project.set_default_project_id(None)
 
 

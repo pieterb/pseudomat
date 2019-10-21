@@ -33,14 +33,9 @@ def initialize_logging(debug: bool):
 
 
 def initialize_database():
-    import sqlalchemy as sa
     from ..common import database
     from . import globals
-    engine = sa.create_engine(
-        'sqlite:///' + str(globals.config_dir() / 'pseudomat.sqlite'),
-        isolation_level='SERIALIZABLE'
-    )
-    database.set_engine(engine)
+    database.initialize_database(globals.config_dir() / 'pseudomat.sqlite')
 
 
 def main():

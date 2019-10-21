@@ -2,7 +2,7 @@ import pathlib
 import sys
 from yarl import URL
 
-SERVER_URL = URL('http://localhost:8080/')
+SERVER_URL = URL('http://localhost:5000/')
 
 
 def config_dir() -> pathlib.Path:

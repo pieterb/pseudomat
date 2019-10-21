@@ -7,14 +7,15 @@ from jwcrypto import jwk, jws, jwt
 import requests
 
 from ... import common
-from .. import database, globals
+from ...common import database
+from .. import globals
 
 _logger = logging.getLogger(__name__)
 
 DEFAULT_PROJECT = 'default_project'
 
 
-def create_local_project(iss: str, sub: str) -> database.Project:
+def create_local_project(iss: str, sub: str) -> dict:
     """
     Returns:
         A stored invite object.
@@ -62,32 +63,30 @@ def create_local_project(iss: str, sub: str) -> database.Project:
     t.make_signed_token(sigkey)
     t = t.serialize()
 
-    project = database.Project(
-        jti=project_id,
-        sub=sub,
-        iss=iss,
-        iat=iat,
-        psig=psig,
-        penc=penc,
-        ssig=ssig,
-        senc=senc,
-        jws=t
-    )
-    try:
-        database.add_project(project)
-    except database.IntegrityError:
+    project = {
+        "jti": project_id,
+        "sub": sub,
+        "iss": iss,
+        "psig": psig,
+        "penc": penc,
+        "ssig": ssig,
+        "senc": senc,
+        "jws": t
+    }
+    created = database.create_project(**project)
+    if not created:
         sys.exit("A project with that name already exists.")
 
     return project
 
 
-def create_remote_project(project: database.Project):
+def create_remote_project(project: dict):
     # The next line is deliberately not in a try-except block. It’s no problem
     # to propagate this error all the way up.
-    r = requests.put(
-        url=globals.SERVER_URL / project.jti,
+    r = requests.post(
+        url=globals.SERVER_URL,
         headers={'Content-Type': 'application/jose'},
-        data=project.jws,
+        data=project['jws'],
         allow_redirects=False
     )
     if r.status_code in range(400, 500):
@@ -100,9 +99,9 @@ def create_remote_project(project: database.Project):
         _logger.info("%s: %s" % (r.reason, r.text))
 
 
-def get_current_project(args=None, required=True) -> T.Optional[database.Project]:
+def get_current_project(args=None, required=True) -> T.Optional[dict]:
     if args is not None and 'project' in args and args.project is not None:
-        retval = database.get_project(sub=args.project)
+        retval = database.get_project(common.fingerprint(args.project))
         if retval is None:
             sys.exit("Project '%s' not found." % args.project)
     else:
@@ -112,7 +111,7 @@ def get_current_project(args=None, required=True) -> T.Optional[database.Project
                 sys.exit("No default project. Specify a project with --project.")
             else:
                 return None
-        retval = database.get_project(jti=project_id)
+        retval = database.get_project(project_id)
         assert retval is not None
     return retval
 
@@ -125,33 +124,33 @@ def list_projects(_args):
     projects = database.get_projects()
     default_project = get_current_project(required=False)
     for project in projects:
-        line = 'M' if project.ssig is None else 'O'
-        if default_project is not None and project.jti == default_project.jti:
+        line = 'M' if project['ssig'] is None else 'O'
+        if default_project is not None and project['jti'] == default_project['jti']:
             line += '*'
         else:
             line += ' '
-        line += ': <%s> %s' % (project.iss, project.sub)
+        line += ': <%s> %s' % (project['iss'], project['sub'])
         print(line)
 
 
-def delete_local_project(project):
-    return database.delete_project(project)
+def delete_local_project(project: dict) -> bool:
+    return database.delete_project(project['jti'])
 
 
-def delete_remote_project(project: database.Project):
+def delete_remote_project(project: dict):
     payload = common.fingerprint({
         'method': 'DELETE',
-        'path': '/' + project.jti
+        'path': '/' + project['jti']
     })
-    assert project.ssig is not None, "You’re not the owner of project '%s'." % project.sub
-    sigkey = jwk.JWK.from_json(project.ssig)
+    assert project['ssig'] is not None, "You’re not the owner of project '%s'." % project['sub']
+    sigkey = jwk.JWK.from_json(project['ssig'])
     token = jws.JWS(payload=payload)
     token.add_signature(sigkey, protected={'alg': 'EdDSA'})
     token = token.serialize(compact=True)
     # The next line is deliberately not in a try-except block. It’s no problem
     # to propagate this error all the way up.
     r = requests.delete(
-        url=globals.SERVER_URL / project.jti,
+        url=globals.SERVER_URL / project['jti'],
         headers={'Authorization': 'Bearer ' + token},
         allow_redirects=False
     )

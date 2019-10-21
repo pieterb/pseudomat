@@ -7,8 +7,6 @@ import sqlalchemy.event
 from sqlalchemy.exc import DBAPIError, IntegrityError
 import sqlalchemy as sa
 
-from .__init__ import fingerprint
-
 _logger = logging.getLogger(__name__)
 _engine: T.Optional[sa.engine.Engine] = None
 
@@ -86,7 +84,7 @@ insert into config (key, value) VALUES ('schema', '1')
 
 def initialize_database(filepath):
     teardown_database()
-    _logger.info("Connecting to sqlite database: %s", filepath)
+    _logger.debug("Connecting to sqlite database: %s", filepath)
     global _engine
     _engine = sa.create_engine(
         'sqlite:///%s' % filepath,
@@ -102,20 +100,9 @@ def initialize_database(filepath):
                 connection.execute(stmt)
 
 
-def teardown_database():
+def teardown_database(_exc=None):
     if _engine is not None:
         _engine.dispose()
-
-
-def connection_unused() -> T.ContextManager[sa.engine.Connection]:
-    """
-    .. warning::
-
-        The connection must either be used as a context manager, or be closed
-        explicitly after use with :ref:`~sa.engine.Connection.close()`.
-    """
-    global _engine
-    return _engine.connect()
 
 
 @sa.event.listens_for(sa.engine.Engine, "connect")
@@ -211,6 +198,17 @@ def get_project(project_id: str) -> T.Optional[dict]:
     )
     result = result_proxy.first()
     return None if result is None else dict(result.items())
+
+
+def get_projects() -> T.List[dict]:
+    project = metadata().tables['project']
+    result_proxy = _engine.execute(
+        sa.select([project]).select_from(project)
+    )
+    retval = []
+    for row in result_proxy:
+        retval.append(dict(row))
+    return retval
 
 
 def delete_project(project_id: str) -> bool:

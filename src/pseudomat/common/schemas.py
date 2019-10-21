@@ -4,7 +4,7 @@ import pathlib
 import typing as T
 import yaml
 
-from aiohttp import web_exceptions as web
+import werkzeug.exceptions as exc
 import jsonschema
 
 _logger = logging.getLogger(__package__)
@@ -21,8 +21,8 @@ def _load_schema(path: pathlib.Path) -> T.Union[T.Dict, T.List]:
 
 def validate_schema(p: dict, jws_type: str) -> None:
     if jws_type not in SCHEMAS:
-        raise web.HTTPUnprocessableEntity(
-            text="JWS validation failed: Unknown 'typ': %s" % jws_type
+        raise exc.UnprocessableEntity(
+            "JWS validation failed: Unknown 'typ': %s" % jws_type
         )
     schema_file = 'schema_%s.yaml' % jws_type
     s = _load_schema(pathlib.Path(__file__).parent / schema_file)
@@ -30,8 +30,8 @@ def validate_schema(p: dict, jws_type: str) -> None:
         jsonschema.validate(p, s)
     except jsonschema.exceptions.SchemaError as e:
         _logger.exception(e)
-        raise web.HTTPInternalServerError(text='Schema error for type %s' % jws_type)
+        raise exc.InternalServerError('Schema error for type %s' % jws_type)
     except jsonschema.exceptions.ValidationError as e:
-        raise web.HTTPUnprocessableEntity(
-            text="JWS validation failed: %s" % e
+        raise exc.UnprocessableEntity(
+            "JWS validation failed: %s" % e
         )

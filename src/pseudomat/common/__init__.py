@@ -9,7 +9,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey, 
 from cryptography.exceptions import InvalidSignature
 from jwcrypto import jwk, jws
 
-from . import schemas
+from . import exceptions, schemas
 
 _logger = logging.getLogger(__package__)
 VERSION = '0.1.0'
@@ -56,41 +56,47 @@ def fingerprint(o: T.Union[bytes, str, list, dict], rtype=str) -> T.Union[str, b
 
 
 def validate_jws(data: str, typ: str) -> T.Tuple[jws.JWS, T.Dict[str, T.Any]]:
-    # Attempt decoding the JWS:
+    """
+    Raises:
+        pseudomat.common.exceptions.HTTPResponse: Bad Request; read the source for details.
+    """
     decoder = jws.JWS()
     try:
         decoder.deserialize(data)
     except jws.InvalidJWSObject:
-        raise ValueError(
-            "Syntax error in JWS"
-        )
+        raise exceptions.HTTPResponse(400, "Syntax error in JWS.")
     if decoder.jose_header.get('typ', None) != typ:
-        raise ValueError("Invalid 'typ' claim.")
+        raise exceptions.HTTPResponse(400, "Invalid 'typ' claim.")
     try:
         payload = json_loads(decoder.objects['payload'])
     except json.JSONDecodeError:
-        raise ValueError(
-            "Payload isn’t valid JSON"
-        )
+        raise exceptions.HTTPResponse(400, "Payload isn’t valid JSON.")
 
     return decoder, payload
 
 
 def validate_project_jws(data: str) -> dict:
-    # JOSE header checks:
-    # # Assert 'kid' is in jose header:
-    # kid = decoder.jose_header.get('kid', None)
-    # assert kid is not None, "No 'kid' entry in jose header."
-
+    """
+    Raises:
+        pseudomat.common.exceptions.HTTPResponse: ``400 Bad Request`` for JWS
+            syntax errors
+        pseudomat.common.exceptions.HTTPResponse: ``422 Unprocessable Entity`` for
+            other problems with the provided JWS.
+    """
+    # Raises 400 Bad Request:
     decoder, payload = validate_jws(data, 'project')
 
     # From here on, "Unprocessable Entity" must be raised on error:
     try:
         schemas.validate_schema(payload, 'project')
-        assert payload['sub'] == payload['sub'].strip(' '), \
+        assert (
+            payload['sub'] == payload['sub'].strip(' '),
             "Claim 'sub' mustn’t start or end with whitespace."
-        assert payload['jti'] == fingerprint(payload['sub']), \
+        )
+        assert (
+            payload['jti'] == fingerprint(payload['sub']),
             "Claim 'jti' doesn’t correspond with claim 'sub'."
+        )
 
         # Extract and syntax-check the keys:
         signing_key: T.Optional[jwk.JWK] = None
@@ -99,8 +105,9 @@ def validate_project_jws(data: str) -> dict:
             try:
                 key = jwk.JWK.from_json(json_dumps(value))
             except jwk.JWException:
-                raise web.HTTPUnprocessableEntity(
-                    text="Claim '%s' doesn’t contain a valid JWK."
+                raise exceptions.HTTPResponse(
+                    422,  # Unprocessable Entity
+                    "Claim '%s' doesn’t contain a valid JWK."
                 )
             assert not key.has_private, "Private key found in keyset."
             if claim == 'psig':
@@ -110,32 +117,36 @@ def validate_project_jws(data: str) -> dict:
         try:
             decoder.verify(signing_key, alg='EdDSA')
         except jws.InvalidJWSSignature:
-            raise web.HTTPUnprocessableEntity(
-                text="Signature validation failed."
+            raise exceptions.HTTPResponse(
+                422,  # Unprocessable Entity
+                "Signature validation failed."
             )
 
     except AssertionError as e:
-        raise web.HTTPUnprocessableEntity(
-            text=str(e)
-        )
+        raise exceptions.HTTPResponse(422, str(e))  # Unprocessable Entity
 
     return payload
 
 
 def validate_invite_jws(data: str, project_key: jwk.JWK) -> dict:
+    # language=rst
     """
     Raises:
-        ValueError: Corresponds to
+        ValueError: corresponds to ``400 Bad Request``
     """
-    decoder, payload = validate_jws(data, 'pinvite')
+    decoder, payload = validate_jws(data, 'pinvite')  # Raises ValueError
 
     # From here on, "Unprocessable Entity" must be raised on error:
     try:
         schemas.validate_schema(payload, 'pinvite')
-        assert payload['sub'] == payload['sub'].strip(' '), \
+        assert (
+            payload['sub'] == payload['sub'].strip(' '),
             "Claim 'sub' mustn’t start or end with whitespace."
-        assert payload['jti'] == fingerprint([payload['iss'], payload['sub']]), \
+        )
+        assert (
+            payload['jti'] == fingerprint([payload['iss'], payload['sub']]),
             "Claim 'jti' doesn’t compute."
+        )
 
         # Extract and syntax-check the keys:
         for claim in ('psig', 'penc'):
@@ -143,8 +154,9 @@ def validate_invite_jws(data: str, project_key: jwk.JWK) -> dict:
             try:
                 key = jwk.JWK.from_json(json_dumps(value))
             except jwk.JWException:
-                raise web.HTTPUnprocessableEntity(
-                    text="Claim '%s' doesn’t contain a valid JWK."
+                raise exceptions.HTTPResponse(
+                    422,  # Unprocessable Entity
+                    "Claim '%s' doesn’t contain a valid JWK."
                 )
             assert not key.has_private, "Private key found in keyset."
 
@@ -152,13 +164,15 @@ def validate_invite_jws(data: str, project_key: jwk.JWK) -> dict:
         try:
             decoder.verify(project_key, alg='EdDSA')
         except jws.InvalidJWSSignature:
-            raise web.HTTPUnprocessableEntity(
-                text="Signature validation failed."
+            raise exceptions.HTTPResponse(
+                422,  # Unprocessable Entity
+                "Signature validation failed."
             )
 
     except AssertionError as e:
-        raise web.HTTPUnprocessableEntity(
-            text=str(e)
+        raise exceptions.HTTPResponse(
+            422,  # Unprocessable Entity
+            str(e)
         )
 
     return payload

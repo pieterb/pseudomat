@@ -1,3 +1,6 @@
+*.bak
+*~
+
 # Python volatile artifacts:
 *.pyc
 __pycache__/

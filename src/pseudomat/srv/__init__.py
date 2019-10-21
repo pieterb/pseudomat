@@ -2,18 +2,20 @@ import logging
 import pathlib
 import typing as T
 
-from flask import Flask
+from flask import Flask, make_response
+
+from ..common import exceptions
 
 _logger = logging.getLogger(__name__)
 
 
 def create_app(test_config: T.Optional[dict] = None):
-    # create and configure the app
-    app = Flask(__name__, instance_relative_config=True, instance_path=pathlib.Path('./instance').absolute())
+    app = Flask(__name__, instance_relative_config=True, instance_path=pathlib.Path('.').absolute())
 
-    # ensure the instance folder exists:
     instance_path = pathlib.Path(app.instance_path)
-    instance_path.mkdir(parents=True, exist_ok=True)
+
+    # # ensure the instance folder exists:
+    # instance_path.mkdir(parents=True, exist_ok=True)
 
     app.config.from_mapping(
         # SECRET_KEY='dev',
@@ -33,5 +35,9 @@ def create_app(test_config: T.Optional[dict] = None):
 
     from . import project
     app.register_blueprint(project.bp)
+
+    @app.errorhandler(exceptions.HTTPResponse)
+    def handle_httperror(e: exceptions.HTTPResponse):
+        return e.rv
 
     return app

@@ -8,12 +8,12 @@ import requests
 from pseudomat import common
 
 from ..globals import *
-from .. import database
+from ...common import database
 
 _logger = logging.getLogger(__name__)
 
 
-def create_local_invite(project: database.Project, sub: str) -> database.Invite:
+def create_local_invite(project: dict, sub: str) -> database.Invite:
     """
     Returns:
         A stored project object.
